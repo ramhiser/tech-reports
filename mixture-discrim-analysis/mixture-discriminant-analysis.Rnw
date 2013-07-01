@@ -1,0 +1,376 @@
+\documentclass[12pt]{article}
+\usepackage{graphicx, amsmath, amssymb, bm, url, mathtools, natbib, amsthm}
+
+\bibpunct{(}{)}{;}{a}{,}{,}
+
+% The following package allows for doublespacing
+\usepackage{setspace}
+
+\newcommand{\tr}{\text{tr}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+
+\setlength{\oddsidemargin}{0 in} % odd page left margin
+\setlength{\evensidemargin}{0 in} % even page left margin
+\setlength{\textwidth}{6 in}    % width of text
+
+\title{An Overview of Mixture Discriminant Analysis}
+
+\author{John A. Ramey\\\url{http://ramhiser.com}\\\url{johnramey@gmail.com}}
+
+\begin{document}
+
+<<<setup, include=FALSE, cache=FALSE>>=
+opts_chunk$set(fig.align = 'center', echo = FALSE, message = FALSE, cache = TRUE)
+@ 
+
+\maketitle
+
+\doublespacing
+
+\begin{abstract}
+
+\cite{Hastie:1996uv} proposed a discriminant analysis model based on a mixture
+of Gaussians, each of which share a common covariance matrix. The mixture
+discriminant analysis (MDA) model provides a natural extension of the standard
+Gaussian assumptions underlying the well-known linear and quadratic discriminant
+analysis methods. However, because the estimators for the model have no
+closed-form, an EM algorithm was used. In this document, we provide a verbose
+construction of the model along with a thorough derivation of the parameter
+estimators as some of the details from \cite{Hastie:1996uv} were indeed
+sparse. Using a simple two-dimensional simulated data set, we demonstrate that
+the MDA classifier identifies three classes, each of which has non-adjacent
+subclasses, whereas standard Gaussian assumption employed in linear and
+quadratic discriminant analysis is clearly inadequate and produces poor decision
+boundaries.
+\end{abstract}
+
+\section{Introduction}
+
+In discriminant analysis or supervised learning we wish to assign correctly an
+unlabeled $p$-dimensional observation vector $\bm x$ to one of $K$ unique, known
+classes. We assume that the true membership of $\bm x$ is determined by a
+mapping $y = f(\bm x)$ for some unknown function $f$. Our goal is to estimate
+$f$ from a labeled training data set $\mathcal{D} = \{\bm x_1, \ldots, \bm x_n\}$,
+where $\bm x_i \in \mathbb{R}_{p \times 1}$ is the $i$th training
+observation with true, unique membership $y_i \in \{1, \ldots, K\}$
+and $\mathbb{R}_{a \times b}$ denotes the matrix space of all $a \times b$
+matrices over the real field $\mathbb{R}$. Using $\mathcal{D}$ we train a
+classifier and select the most probable class label of $\bm x$
+\begin{align}
+  \hat{y} = \hat{f}(\bm x) &= \argmax_k p(y = k | \bm x)\notag\\
+  &= \argmax_k \pi_k f_k(\bm x), \label{eq:generative-classifier}
+\end{align}
+where $f_k(\bm x)$ is the $k$th class-conditional probability density function
+and $\pi_k$ is the prior probability of class membership of the $k$th class.
+The formulation given in \eqref{eq:generative-classifier} is seen immediately
+from Bayes' rule and is often called a \textbf{generative classifier}.
+
+\section{Mixture Discriminant Analysis}
+
+Traditionally, in the statistics literature $f_k(\bm x)$ is often
+$N_p(\bm x | \bm \mu_k, \bm \Sigma_k)$, the $p$-dimensional multivariate normal
+distribution with mean vector $\bm \mu_k \in \mathbb{R}_{p \times 1}$ and
+positive-definite covariance matrix $\bm \Sigma_k \in \mathbb{R}_{p \times p}$.
+The resulting classifier is quadratic discriminant analysis (QDA), which is
+quadratic in $\bm x$ and has quadratic decision boundaries. It is well-known
+that the training sample size $n$ must be large relative to the feature
+dimension $p$ to estimate each of $\bm \Sigma_k$ well. The simplifying
+assumption $\bm \Sigma_k = \bm \Sigma$ is often employed to reduce the number of
+parameters to estimate as well as to increase model parsimony. The resulting
+classifier is linear discriminant analysis (LDA), which is linear in $\bm x$ and
+has linear decision boundaries. Despite the reduction in the number of
+parameters to estimate, the LDA classifier is ill-posed if $p > n$ because the
+sample covariance matrix is singular, in which case either regularization
+methods, feature selection, or further model restrictions are employed, such as
+assuming $\bm \Sigma$ is diagonal \citep{Ramey:2013ji,Dudoit:2002ev}. 
+
+\cite{Clemmensen:2011kr} argue that although LDA is often well-suited for
+simple, low-dimensional settings, linear decision boundaries are often
+insufficient to separate classes in practice. Furthermore, a single Gaussian
+distribution may be insufficient in characterizing a single class. With the
+latter point in mind, \cite{Hastie:1996uv} propose mixture discriminant analysis
+(MDA), where $f_k(\bm x)$ is the probability density function of a finite
+Gaussian mixture model. That is, let
+\begin{align}
+  f_k(\bm x) = \sum_{r=1}^{R_k} \pi_{kr} N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma)\label{eq:PDF-gaussian-mixture}
+\end{align}
+be a finite mixture density with $R_k$ mixture components, where the $r$th
+mixture density has prior probability of $\pi_{kr}$, such that
+$\sum_{r=1}^{R_k} \pi_{kr} = 1$. Note that $\bm \Sigma$ is equal across all
+classes and subclasses, similar to LDA, in part for model parsimony as well as
+shrinkage and dimension reduction.
+
+\subsection{Model Formulation}
+
+In this document, we consider the MDA model as defined by \cite{Hastie:1996uv}
+and verbosely provide the details of the likelihood and the estimation of the
+model parameters. Our notation largely agrees with the original formulation. We
+refer the interested reader to the original paper for insight regarding the
+additional topics of reduced-rank discrimination, optimal scoring, and shrinkage
+applied to the MDA model as these formulations are adequately described by the
+authors.
+
+From the mixture density \eqref{eq:PDF-gaussian-mixture} we see that $\bm x_i$,
+$i = 1, \ldots, n$, is realized from one of the $R_k$ subclasses, but we do not
+know which one. Contrarily, we emphasize that the true class label $y_i = k$ for
+$\bm x_i$ is known. Now, had we been privy to the subclass from which $\bm x_i$
+was generated, the parameters $\bm \theta_{kr} = (\bm \mu_{kr}, \pi_{kr})$ for
+subclass $r_k$ could be estimated in a straightforward manner. However, the
+indicator $z_{ikr}$ that $\bm x_i$ was realized from subclass $r_k$ is hidden,
+which suggests an EM algorithm approach to estimate the model parameters. Notice
+that $\sum_{r=1}^{R_k} z_{ikr} = 1$. Additionally, if $y_i = k$, we write
+$y_{ik} = 1$ and 0 otherwise. For clarity, note that $y_{ik}$ is known and not
+random, while $z_{ikr}$ is unknown.
+
+We define $\bm X = \{\bm x_1, \ldots, \bm x_n\}$, $\bm Y = \{y_1, \ldots, y_n\}$,
+and $\bm Z = \{\bm z_1, \ldots, \bm z_n\}$, where
+$\bm z_i = [z_{i1}, \ldots, z_{ir_k}]'$. The complete data likelihood is
+\begin{align*}
+  L(\bm \theta | \bm X, \bm Y, \bm Z) &= \prod_{i = 1}^n \prod_{k=1}^K \left\{\pi_k f_k (\bm x_i)\right\}^{y_{ik}}\\
+  &= \prod_{i = 1}^n \prod_{k=1}^K \prod_{r = 1}^{R_k} \pi_k^{y_{ik}} \left\{
+  \pi_{kr} N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma)\right\}^{y_{ik} z_{ikr}}.
+\end{align*}
+
+Hence, the complete data log likelihood is
+\begin{align*}
+l(\bm \theta | \bm X, \bm Y, \bm Z) = \sum_{i = 1}^n \sum_{k=1}^K y_{ik} \log \pi_k + \sum_{i = 1}^n
+\sum_{k=1}^K \sum_{r = 1}^{R_k} y_{ik} z_{ikr} \left \{ \log \pi_{kr} +  \log
+N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma) \right\}.
+\end{align*}
+
+Notice that the log-likelihood is unconstrained so that the probabilities are
+unbounded. Hence, we add Lagrange multipliers to ensure that $\sum_{k=1}^K \pi_k = 1$
+and $\sum_{i=1}^{R_k} \pi_{kr} = 1$. Hence, the constrained complete log likelihood is
+\begin{align*}
+  l(\bm \theta | \bm X, \bm Y, \bm Z) &= \sum_{i = 1}^n \sum_{k=1}^K y_{ik} \log \pi_k
+    + \sum_{i = 1}^n \sum_{k=1}^K \sum_{r = 1}^{R_k} y_{ik} z_{ikr} \left \{ \log \pi_{kr}
+    + \log N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma) \right\}\\
+  &+ \eta \left( \sum_{k=1}^K \pi_k - 1 \right)
+    + \sum_{k=1}^K \eta_k \left( \sum_{r=1}^{R_k} \pi_{kr} - 1 \right).
+\end{align*}
+
+\section{Estimation via the EM Algorithm}
+
+The parameters are estimated using the EM algorithm.
+
+\subsection{E-Step}
+For the set of parameter estimates $\bm \theta^{(t)}$ at iteration $t$, the
+expectation of the complete data log likelihood with respect to the conditional
+distribution of $\bm Z$ given $\bm X$ and $\bm Y$ is
+\begin{align}
+  Q(\bm \theta | \bm \theta^{(t)}) &= E[l(\bm \theta | \bm X, \bm Y, \bm Z)] \notag\\
+  &= \sum_{i = 1}^n \sum_{k=1}^K y_{ik} \log \pi_k
+    + \sum_{i = 1}^n \sum_{k=1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr} \left \{ \log \pi_{kr}
+    + \log N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma) \right\} \notag\\
+  &+ \eta \left( \sum_{k=1}^K \pi_k - 1 \right)
+    + \sum_{k=1}^K \eta_k \left( \sum_{r=1}^{R_k} \pi_{kr} - 1 \right),\label{eq:expected-log-likelihood}
+\end{align}
+where
+\begin{align*}
+p_{ikr} = E[z_{ikr}] =  p(z_{ikr} | \bm x_i, \bm \theta^{(t)}) = \dfrac{\pi_{kr}
+  N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma)}{\sum_{k=1}^K \pi_{kr} N_p(\bm x_i | \bm \mu_{kr}, \bm \Sigma)}
+\end{align*}
+is the probability that $\bm x_i$ is a member of subclass $r_k$ conditional on
+$\bm x_i$ belonging to class $k$ (i.e., $y_{ik} = 1$). The value $p_{ikr}$ is
+often called the \textbf{responsibility} that cluster $r_k$ takes for
+observation $i$. Notice that $\sum_{r = 1}^{R_k} p_{ikr} = 1$. Also, we define
+$p_{kr} = \sum_{i=1}^n y_{ik} p_{ikr}$.
+
+\subsection{M-Step}
+
+Here, we wish to optimize \eqref{eq:expected-log-likelihood} with respect to the unknown
+parameters given in $\bm \theta$. That is, we calculate
+\begin{align*}
+  \bm \theta^{(t+1)} = \argmax_{\bm \theta} Q(\bm \theta | \bm \theta^{(t)}).
+\end{align*}
+Below, we optimize each parameter of interest in turn by setting the gradient
+equal to zero and solving the resulting system of equations.
+
+\subsubsection{Estimation of $\pi_k$}
+First, we write
+\begin{align*}
+\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \pi_k} &= \sum_{i = 1}^n \frac{y_{ik}}{\pi_k} + \eta
+  = \frac{n_k}{\pi_k} + \eta\\
+\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \eta} &= \sum_{k=1}^K \pi_k - 1.
+\end{align*}
+From $\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \pi_k} = \frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \eta} = 0$,
+we have $\pi_k = -\frac{n_k}{\eta}$ and $\sum_{k=1}^K \pi_k = 1$, which implies
+that $\sum_{k=1}^K -\frac{n_k}{\eta} = 1$. Hence, $\eta = -n$ and
+\begin{align}
+  \widehat{\pi}_k &= \frac{n_k}{n}.\label{eq:pi_k}
+\end{align}
+
+\subsubsection{Estimation of $\pi_{kr}$}
+Next, we have that
+\begin{align*}
+\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \pi_{kr}} &= \sum_{i = 1}^n \frac{y_{ik}p_{ikr}}{\pi_{kr}} + \eta_k
+  = \frac{p_{kr}}{\pi_{kr}} + \eta_k\\
+\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \eta} &= \sum_{r=1}^{R_k} \pi_{kr} - 1.
+\end{align*}
+From $\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \pi_{kr}} = \frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \eta_k} = 0$,
+we have $\pi_{kr} = -\frac{p_{kr}}{\eta_k}$ and $\sum_{r=1}^{R_k} \pi_{kr} = 1$,
+which implies that
+\begin{align*}
+  -\sum_{r=1}^{R_k} \frac{p_{kr}}{\eta_k} = 1.
+\end{align*}
+Hence, $\eta_k = -n_k$ and
+\begin{align}
+  \widehat{\pi}_{kr} &= \frac{p_{kr}}{n_k}.\label{eq:pi_kr}
+\end{align}
+
+\subsubsection{Estimation of $\bm\mu_{kr}$}
+Recall that $\frac{\partial (\bm a' \bm A \bm a)}{\partial \bm a} = (\bm A + \bm A') \bm a$
+for $\bm a \in \mathbb{R}_{p \times 1}$ and $\bm A \in \mathbb{R}_{p \times p}$
+\citep[p.~99]{Murphy:2012uq}. Letting $\bm y = \bm x - \bm \mu_{kr}$ and applying
+the chain rule, we have that
+\begin{align*}
+  \frac{\partial}{\partial \bm \mu_{kr}} \log N(\bm x | \bm \mu_{kr}, \bm \Sigma)
+  &= -\frac{1}{2} \frac{\partial}{\partial \bm \mu_{kr}} (\bm x - \bm \mu_{kr})'
+  \bm \Sigma^{-1} (\bm x - \bm \mu_{kr})\\
+  &= -\frac{1}{2} \frac{\partial}{\partial \bm \mu_{kr}} \bm y' \bm \Sigma^{-1}
+  \bm y \frac{\partial \bm y}{\partial \bm \mu_{kr}}\\
+  &= \bm \Sigma^{-1} (\bm x - \bm \mu_{kr}).
+\end{align*}
+Thus,
+\begin{align*}
+\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \bm \mu_{kr}} &= \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k}
+  y_{ik} p_{ikr} \frac{\partial}{\partial \bm \mu_{kr}} \log N(\bm x | \bm \mu_{kr}, \bm \Sigma)\\
+  &= \sum_{i=1}^n y_{ik} p_{ikr} \bm \Sigma^{-1} (\bm x_i - \bm \mu_{kr}).
+\end{align*}
+Setting $\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \bm \mu_{kr}} = 0$, we have
+\begin{align*}
+  \sum_{i=1}^n y_{ik} p_{ikr} \bm x_i &= \sum_{i=1}^n y_{ik} p_{ikr} \bm \mu_{kr}\\
+  &= p_{kr} \bm \mu_{kr},
+\end{align*}
+which implies that
+\begin{align}
+  \widehat{\bm \mu}_{kr} = \frac{\sum_{i=1}^n y_{ik} p_{ikr} \bm x_i}{p_{kr}}.\label{eq:mu_kr}
+\end{align}  
+
+\subsubsection{Estimation of $\bm\Sigma$}
+Recall that $\frac{\partial}{\partial \bm A} |\bm A| = (\bm A^{-1})'$ and
+$\frac{\partial}{\partial \bm A} \tr(\bm B \bm A) = \bm B'$
+for $\bm A, \bm B \in \mathbb{R}_{p \times p}$ \citep[p.~99]{Murphy:2012uq}.
+Hence,
+\begin{align*}
+  \frac{\partial}{\partial \bm \Sigma} \log N(\bm x | \bm \mu_{kr}, \bm \Sigma)
+  &= -\frac{1}{2} \frac{\partial}{\partial \bm \Sigma} \left\{ \log |\bm \Sigma|
+     + (\bm x - \bm \mu_{kr})' \bm \Sigma^{-1} (\bm x - \bm \mu_{kr}) \right\}\\
+  &= \frac{1}{2} \frac{\partial}{\partial \bm \Sigma} \left[ \log |\bm \Sigma|
+     - \tr \left\{ (\bm x - \bm \mu_{kr}) (\bm x - \bm \mu_{kr})' \bm \Sigma^{-1}
+     \right\} \right]\\
+  &= -\frac{1}{2} \bm \Sigma^{-1} + \frac{1}{2} \bm \Sigma^{-1} (\bm x - \bm \mu_{kr}) (\bm x - \bm \mu_{kr})' \bm \Sigma^{-1}.
+\end{align*}
+Thus,
+\begin{align*}
+\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \bm \Sigma} &= \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k}
+  y_{ik} p_{ikr} \frac{\partial}{\partial \bm \Sigma} \log N(\bm x | \bm \mu_{kr}, \bm \Sigma)\\
+  &= -\frac{1}{2} \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr}\bm \Sigma^{-1}
+  + \frac{1}{2} \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr} \bm \Sigma^{-1} (\bm x - \bm \mu_{kr}) (\bm x - \bm \mu_{kr})' \bm \Sigma^{-1}.
+\end{align*}
+Setting $\frac{\partial Q(\bm \theta | \bm \theta^{(t)})}{\partial \bm \Sigma} = 0$, we have
+\begin{align*}
+  \frac{1}{2} \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr}\bm
+  \Sigma^{-1} &=
+  \frac{1}{2} \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr} \bm \Sigma^{-1} (\bm x_i - \bm \mu_{kr}) (\bm x_i - \bm \mu_{kr})' \bm \Sigma^{-1}.
+\end{align*}
+Premultiplying and postmultiplying by $\bm \Sigma$, we have
+\begin{align*}
+  \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr} (\bm x_i - \bm \mu_{kr}) (\bm x_i - \bm \mu_{kr})'
+  = \sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr}\bm \Sigma
+  = n \bm \Sigma,
+\end{align*}
+which implies that
+\begin{align}
+  \widehat{\bm \Sigma} = \frac{1}{n}\sum_{i = 1}^n\sum_{k = 1}^K \sum_{r = 1}^{R_k} y_{ik} p_{ikr} (\bm x_i - \widehat{\bm \mu}_{kr}) (\bm x_i - \widehat{\bm \mu}_{kr})'.\label{eq:Sigma}
+\end{align}  
+
+\section{Example}
+
+Using a simple simulated data set, we demonstrate that the LDA and QDA
+classifiers based on a Gaussian assumption can be inadequate.  We contrast the
+decision boundaries with those obtained via the {\tt mda} R package available on
+CRAN\footnote{\url{http://cran.r-project.org/web/packages/mda}}.
+
+In this example, we generate $K = 3$ classes, each of which has 3 subclasses. We
+selected the location of the subclasses so that no subclass was adjacent either
+horizontally or vertically. We used all of the defaults from the {\tt lda} and
+{\tt qda} functions from the {\tt MASS} R package. Likewise, we applied only the
+defaults for the MDA classifier: in particular, we allowed the number of
+subclasses to be determined automatically.
+
+
+<<classification_study>>=
+library(MASS)
+library(mvtnorm)
+library(mda)
+library(ggplot2)
+
+set.seed(42)
+n <- 500
+
+# Randomly sample data
+x11 <- rmvnorm(n = n, mean = c(-4, -4))
+x12 <- rmvnorm(n = n, mean = c(0, 4))
+x13 <- rmvnorm(n = n, mean = c(4, -4))
+
+x21 <- rmvnorm(n = n, mean = c(-4, 4))
+x22 <- rmvnorm(n = n, mean = c(4, 4))
+x23 <- rmvnorm(n = n, mean = c(0, 0))
+
+x31 <- rmvnorm(n = n, mean = c(-4, 0))
+x32 <- rmvnorm(n = n, mean = c(0, -4))
+x33 <- rmvnorm(n = n, mean = c(4, 0))
+
+x <- rbind(x11, x12, x13, x21, x22, x23, x31, x32, x33)
+train_data <- data.frame(x, y = gl(3, 3 * n))
+
+# Trains classifiers
+lda_out <- lda(y ~ ., data = train_data)
+qda_out <- qda(y ~ ., data = train_data)
+mda_out <- mda(y ~ ., data = train_data)
+
+# Generates test data that will be used to generate the decision boundaries via
+# contours
+contour_data <- expand.grid(X1 = seq(-8, 8, length = 300),
+                            X2 = seq(-8, 8, length = 300))
+
+# Classifies the test data
+lda_predict <- data.frame(contour_data,
+                          y = as.numeric(predict(lda_out, contour_data)$class))
+qda_predict <- data.frame(contour_data,
+                          y = as.numeric(predict(qda_out, contour_data)$class))
+mda_predict <- data.frame(contour_data,
+                          y = as.numeric(predict(mda_out, contour_data)))
+
+p <- ggplot(train_data, aes(x = X1, y = X2, color = y)) + geom_point()
+@ 
+
+\begin{figure}
+<<lda_boundaries>>=
+p + stat_contour(aes(x = X1, y = X2, z = y), data = lda_predict)
+@ 
+\caption{Decision boundaries via linear discriminant analysis.}
+\end{figure}
+
+\begin{figure}
+<<qda_boundaries>>=
+p + stat_contour(aes(x = X1, y = X2, z = y), data = qda_predict)
+@ 
+\caption{Decision boundaries via quadratic discriminant analysis.}
+\end{figure}
+
+\begin{figure}
+<<mda_boundaries>>=
+p + stat_contour(aes(x = X1, y = X2, z = y), data = mda_predict)
+@ 
+\caption{Decision boundaries via mixture discriminant analysis.}
+\end{figure}
+
+\bibliographystyle{plainnat}
+\bibliography{mixture-discriminant-analysis}
+
+
+\end{document}
