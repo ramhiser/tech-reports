@@ -22,7 +22,9 @@
 \begin{document}
 
 <<<setup, include=FALSE, cache=FALSE>>=
-opts_chunk$set(fig.align = 'center', echo = FALSE, message = FALSE, cache = TRUE)
+opts_chunk$set(fig.align = 'center', echo = FALSE, message = FALSE, cache = TRUE,
+               dev = 'png', autodep = TRUE, fig.width = 12, fig.height = 12,
+               out.width = "\\linewidth")
 @ 
 
 \maketitle
@@ -350,21 +352,21 @@ p <- ggplot(train_data, aes(x = X1, y = X2, color = y)) + geom_point()
 
 \begin{figure}
 <<lda_boundaries>>=
-p + stat_contour(aes(x = X1, y = X2, z = y), data = lda_predict)
+p + stat_contour(aes(x = X1, y = X2, z = y), data = lda_predict) + ggtitle("LDA Decision Boundaries")
 @ 
 \caption{Decision boundaries via linear discriminant analysis.}
 \end{figure}
 
 \begin{figure}
 <<qda_boundaries>>=
-p + stat_contour(aes(x = X1, y = X2, z = y), data = qda_predict)
+p + stat_contour(aes(x = X1, y = X2, z = y), data = qda_predict) + ggtitle("QDA Decision Boundaries")
 @ 
 \caption{Decision boundaries via quadratic discriminant analysis.}
 \end{figure}
 
 \begin{figure}
 <<mda_boundaries>>=
-p + stat_contour(aes(x = X1, y = X2, z = y), data = mda_predict)
+p + stat_contour(aes(x = X1, y = X2, z = y), data = mda_predict) + ggtitle("MDA Decision Boundaries")
 @ 
 \caption{Decision boundaries via mixture discriminant analysis.}
 \end{figure}
